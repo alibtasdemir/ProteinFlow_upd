@@ -1,5 +1,4 @@
 import os
-import GPUtil
 import torch
 
 import hydra
@@ -59,7 +58,8 @@ class Experiment:
             if isinstance(logger.experiment.config, wandb.sdk.wandb_config.Config):
                 logger.experiment.config.update(flat_cfg)
 
-        devices = GPUtil.getAvailable(order='memory', limit=8)[:self._exp_cfg.num_devices]
+        # devices = GPUtil.getAvailable(order='memory', limit=8)[:self._exp_cfg.num_devices]
+        devices = [0]
         log.info(f"Using devices: {devices}")
         trainer = Trainer(
             **self._exp_cfg.trainer,
@@ -68,6 +68,7 @@ class Experiment:
             use_distributed_sampler=False,
             enable_progress_bar=True,
             enable_model_summary=True,
+            #gpus=devices
             devices=devices,
         )
         trainer.fit(

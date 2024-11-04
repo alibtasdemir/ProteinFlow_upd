@@ -4,7 +4,6 @@ import time
 import numpy as np
 import hydra
 import torch
-import GPUtil
 from pytorch_lightning.trainer import Trainer
 from omegaconf import DictConfig, OmegaConf
 import utils.experiments as eu
@@ -61,8 +60,7 @@ class Sampler:
         self._flow_module._output_dir = self._output_dir
 
     def run_sampling(self):
-        devices = GPUtil.getAvailable(
-            order='memory', limit=8)[:self._infer_cfg.num_gpus]
+        devices = [2]
         log.info(f"Using devices: {devices}")
         eval_dataset = eu.LengthDataset(self._samples_cfg)
         dataloader = torch.utils.data.DataLoader(

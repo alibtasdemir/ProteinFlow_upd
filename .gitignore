@@ -387,6 +387,18 @@ data/
 # Project folders
 wandb/
 outputs/
-/ckpt/
+/*ckpt*/
 inference_outputs/
 lightning_logs/
+old_data/
+logs/
+preprocessed*/
+raw_*/
+clipped_*/
+dnmt_full/
+*_data/
+*raw*/
+*.pdb
+*preprocessed*/
+*_data_256/
+metadata.csv

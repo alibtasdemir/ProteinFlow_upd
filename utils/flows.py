@@ -224,3 +224,110 @@ class Interpolant:
         atom37_traj = all_atom.transrot_to_atom37(prot_traj, res_mask)
         clean_atom37_traj = all_atom.transrot_to_atom37(clean_traj, res_mask)
         return atom37_traj, clean_atom37_traj, clean_traj
+    
+    def sample_clf(
+            self,
+            num_batch,
+            num_res,
+            model,
+            clf_model,
+            guidance_scale=0.2,
+            target_class=1,
+    ):
+        res_mask = torch.ones(num_batch, num_res, device=self._device)
+
+        # Set-up initial prior samples
+        trans_0 = _centered_gaussian(
+            num_batch, num_res, self._device) * NM_TO_ANG_SCALE
+        rotmats_0 = _uniform_so3(num_batch, num_res, self._device)
+        batch = {
+            'res_mask': res_mask,
+        }
+
+        # Set-up time
+        ts = torch.linspace(
+            self._cfg.min_t, 1.0, self._sample_cfg.num_timesteps)
+        t_1 = ts[0]
+
+        prot_traj = [(trans_0, rotmats_0)]
+        clean_traj = []
+        for t_2 in ts[1:]:
+
+            # Run model.
+            trans_t_1, rotmats_t_1 = prot_traj[-1]
+            batch['trans_t'] = trans_t_1
+            batch['rotmats_t'] = rotmats_t_1
+            t = torch.ones((num_batch, 1), device=self._device) * t_1
+            batch['t'] = t
+            with torch.no_grad():
+                model_out = model(batch)
+
+            # Process model output.
+            pred_trans_1 = model_out['pred_trans']
+            pred_rotmats_1 = model_out['pred_rotmats']
+            
+            # Create a fake batch
+            next_batch = copy.deepcopy(batch)
+            next_batch['trans_t'] = trans_t_1
+            next_batch['rotmats_t'] = rotmats_t_1
+            with torch.enable_grad():
+                xt_ = copy.deepcopy(next_batch)
+                #xt_['trans_t'] = xt_['trans_t'].detach().requires_grad_(True)
+                xt_['trans_t'] = xt_['trans_t'].requires_grad_(True)
+                #xt_['rotmats_t'] = xt_['rotmats_t'].detach().requires_grad_(True)
+                xt_['rotmats_t'] = xt_['rotmats_t'].requires_grad_(True)
+                # xt_.requires_grad = True
+                cls_logits = clf_model.model(xt_)
+                cls_logits = cls_logits.requires_grad_(True)
+                # print("Classifier outputs")
+                # print(cls_logits)
+                target_tensor = torch.tensor([target_class], device=self._device)
+                # probabilities = torch.nn.functional.softmax(cls_logits, dim=1)
+                classifier_loss = torch.nn.functional.cross_entropy(cls_logits, target_tensor)
+                classifier_loss = classifier_loss.requires_grad_(True)
+                # print(classifier_loss)
+                classifier_loss.backward()
+                print(classifier_loss)
+                print()
+                print(xt_['trans_t'])
+                cls_score_wrt_trans = - torch.autograd.grad(classifier_loss, [xt_['trans_t']])[0]
+                # cls_score = - torch.autograd.grad(loss, [xt_])[0]
+            
+            pred_trans_1 = pred_trans_1 + guidance_scale * cls_score
+            pred_rotmats_1 = pred_rotmats_1 + guidance_scale * cls_score
+            
+            clean_traj.append(
+                (pred_trans_1.detach().cpu(), pred_rotmats_1.detach().cpu())
+            )
+            if self._cfg.self_condition:
+                batch['trans_sc'] = pred_trans_1
+
+            # Take reverse step
+            d_t = t_2 - t_1
+            trans_t_2 = self._trans_euler_step(
+                d_t, t_1, pred_trans_1, trans_t_1)
+            rotmats_t_2 = self._rots_euler_step(
+                d_t, t_1, pred_rotmats_1, rotmats_t_1)
+            prot_traj.append((trans_t_2, rotmats_t_2))
+            t_1 = t_2
+            
+
+        # We only integrated to min_t, so need to make a final step
+        t_1 = ts[-1]
+        trans_t_1, rotmats_t_1 = prot_traj[-1]
+        batch['trans_t'] = trans_t_1
+        batch['rotmats_t'] = rotmats_t_1
+        batch['t'] = torch.ones((num_batch, 1), device=self._device) * t_1
+        with torch.no_grad():
+            model_out = model(batch)
+        pred_trans_1 = model_out['pred_trans']
+        pred_rotmats_1 = model_out['pred_rotmats']
+        clean_traj.append(
+            (pred_trans_1.detach().cpu(), pred_rotmats_1.detach().cpu())
+        )
+        prot_traj.append((pred_trans_1, pred_rotmats_1))
+
+        # Convert trajectories to atom37.
+        atom37_traj = all_atom.transrot_to_atom37(prot_traj, res_mask)
+        clean_atom37_traj = all_atom.transrot_to_atom37(clean_traj, res_mask)
+        return atom37_traj, clean_atom37_traj, clean_traj

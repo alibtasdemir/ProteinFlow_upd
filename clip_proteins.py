@@ -1,12 +1,16 @@
 from Bio import PDB
 import os
 
+clip_len = 512
 RAW_DIR = "raw_dnmt"
-OUT_DIR = "test_protclip"
+OUT_DIR = f"clipped_{clip_len}"
+
+if not os.path.exists(OUT_DIR):
+    os.makedirs(OUT_DIR)
 
 all_file_paths = [os.path.join(RAW_DIR, x) for x in os.listdir(RAW_DIR) if '.pdb' in x]
 total_num_paths = len(all_file_paths)
-clip_len = 256
+
 print(total_num_paths)
 
 
@@ -37,5 +41,5 @@ def clip_protein(pdb_path, output_path, length=128):
 for i, file_path in enumerate(all_file_paths):
     pdb_file_path = file_path
     pdb_name = os.path.basename(file_path).replace('.pdb', '')
-    clipped_pdb_file_path = os.path.join("test_protclip", pdb_name + ".pdb")
+    clipped_pdb_file_path = os.path.join(OUT_DIR, pdb_name + ".pdb")
     clip_protein(pdb_file_path, clipped_pdb_file_path, length=clip_len)

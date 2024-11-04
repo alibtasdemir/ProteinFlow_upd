@@ -8,13 +8,13 @@ data:
     samples_per_eval_length: 5
     num_eval_lengths: 5
     min_eval_length: 500
-    csv_path: preprocessed/metadata_desktop.csv
+    csv_path: full_data_256/metadata.csv
   loader:
     num_workers: 4
     prefetch_factor: 10
   sampler:
     max_batch_size: 100
-    max_num_res_squared: 500_000
+    max_num_res_squared: 500000
 interpolant:
   min_t: 1e-2
   rots:
@@ -28,13 +28,13 @@ interpolant:
     num_timesteps: 100
   self_condition: ${model.edge_features.self_condition}
 model:
-  node_embed_size: 32
-  edge_embed_size: 32
+  node_embed_size: 128
+  edge_embed_size: 128
   symmetric: false
   node_features:
     c_s: ${model.node_embed_size}
-    c_pos_emb: 32
-    c_timestep_emb: 32
+    c_pos_emb: 128
+    c_timestep_emb: 128
     embed_diffuse_mask: false
     max_num_res: 2000
     timestep_int: 1000
@@ -51,17 +51,17 @@ model:
   ipa:
     c_s: ${model.node_embed_size}
     c_z: ${model.edge_embed_size}
-    c_hidden: 32
-    no_heads: 6
+    c_hidden: 128
+    no_heads: 8
     no_qk_points: 8
-    no_v_points: 12
+    no_v_points: 4
     seq_tfmr_num_heads: 4
     seq_tfmr_num_layers: 2
-    num_blocks: 4
+    num_blocks: 6
 experiment:
   debug: false
   seed: 123
-  num_devices: 1
+  #num_devices: 2
   warm_start: null
   warm_start_cfg_override: true
   use_swa: false
@@ -81,8 +81,8 @@ experiment:
     aux_loss_weight: 1.0
     aux_loss_t_pass: 0.25
   wandb:
-    name: dnmt-clipped
-    project: se3-dnmt-128
+    name: dnmt-full-unconditioned
+    project: se3-fm
     save_code: true
     tags: []
   optimizer:
@@ -90,12 +90,14 @@ experiment:
   trainer:
     overfit_batches: 0
     min_epochs: 1
-    max_epochs: 500
+    max_epochs: 300
     accelerator: gpu
     log_every_n_steps: 1
     deterministic: false
-    check_val_every_n_epoch: 25
+    #strategy: ddp
+    check_val_every_n_epoch: 2
     accumulate_grad_batches: 2
+    num_sanity_val_steps: 0
   checkpointer:
     dirpath: ckpt/${experiment.wandb.project}/${experiment.wandb.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
     save_last: true

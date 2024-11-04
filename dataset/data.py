@@ -160,9 +160,11 @@ class PdbDataset(Dataset):
     def __getitem__(self, idx):
         example_idx = idx
         csv_row = self.csv.iloc[example_idx]
+        class_idx = csv_row["class"]
         processed_file_path = csv_row['processed_path']
         chain_features = self._process_csv_row(processed_file_path)
         chain_features['csv_idx'] = torch.ones(1, dtype=torch.long) * idx
+        chain_features["class"] = torch.ones(1, dtype=torch.long) * class_idx
         return chain_features
 
 
