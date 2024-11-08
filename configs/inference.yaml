@@ -9,7 +9,7 @@ inference:
   name: run_${now:%Y-%m-%d}_${now:%H-%M}
   seed: 123
   ckpt_path: ckpt/se3-fm/dnmt-full-unconditioned/2024-09-26_00-42-38/epoch29.ckpt
-  output_dir: inference_outputs/dnmt-full-unconditioned-ep29/
+  output_dir: inference_outputs/dnmt-guided-tests/
 
   use_gpu: True
   num_gpus: 1
@@ -48,7 +48,7 @@ inference:
     overwrite: False
   
   classifier:
-    ckpt_path: ckpt/se3-fm/dnmt-full-unconditioned/2024-09-26_00-42-38/epoch29.ckpt
+    ckpt_path: classifier_ckpt/se3-classifier/classifier-training/2024-07-26_17-09-01/last.ckpt
     node_embed_size: 128
     edge_embed_size: 128
     symmetric: false

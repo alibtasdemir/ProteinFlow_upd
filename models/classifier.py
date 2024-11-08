@@ -70,6 +70,20 @@ class ProtClassifier(nn.Module):
         )
     
     def forward(self, input_features):
+        print("INSIDE FORWARD PASS")
+        print(f"input_dic -> res_mask grad_fn?: {input_features["res_mask"].grad_fn}")
+        print(f"input_dic -> res_mask req_grad?: {input_features["res_mask"].requires_grad}")
+        
+        print(f"input_dic -> trans_t grad_fn?: {input_features["trans_t"].grad_fn}")
+        print(f"input_dic -> trans_t req_grad?: {input_features["trans_t"].requires_grad}")
+        
+        print(f"input_dic -> rotmats_t grad_fn?: {input_features["rotmats_t"].grad_fn}")
+        print(f"input_dic -> rotmats_t req_grad?: {input_features["rotmats_t"].requires_grad}")
+        
+        print(f"input_dic -> t grad_fn?: {input_features["t"].grad_fn}")
+        print(f"input_dic -> t req_grad?: {input_features["t"].requires_grad}")
+        print()
+        
         # Get features
         node_mask = input_features['res_mask']
         padding_amount = 256 - node_mask.shape[1]
@@ -89,6 +103,22 @@ class ProtClassifier(nn.Module):
         # print(f"continuous_t: {continuous_t.shape}")
         # print(f"trans_t: {trans_t.shape}")
         # print(f"rotmats_t: {rotmats_t.shape}")
+        print()
+        print(f"node_mask grad_fn?: {node_mask.grad_fn}")
+        print(f"node_mask req_grad?: {node_mask.requires_grad}")
+        
+        print(f"edge_mask grad_fn?: {edge_mask.grad_fn}")
+        print(f"edge_mask req_grad?: {edge_mask.requires_grad}")
+        
+        print(f"continuous_t grad_fn?: {continuous_t.grad_fn}")
+        print(f"continuous_t req_grad?: {continuous_t.requires_grad}")
+        
+        print(f"trans_t grad_fn?: {trans_t.grad_fn}")
+        print(f"trans_t req_grad?: {trans_t.requires_grad}")
+        
+        print(f"rotmats_t grad_fn?: {rotmats_t.grad_fn}")
+        print(f"rotmats_t req_grad?: {rotmats_t.requires_grad}")
+        print()
 
         # Get embeddings
         init_node_embed = self.node_embedder(continuous_t, node_mask)
@@ -138,5 +168,6 @@ class ProtClassifier(nn.Module):
             # print(f"ipa_flatten_{b}: {nn.Flatten()(ipa_embed).shape}")
         
         x = self.classifier_head(ipa_embed)
+        # x = torch.nn.functional.softmax(self.classifier_head(ipa_embed), dim=-1)
         # print(f"Classifier output: {x.shape}")
         return x

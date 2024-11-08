@@ -225,6 +225,55 @@ class Interpolant:
         clean_atom37_traj = all_atom.transrot_to_atom37(clean_traj, res_mask)
         return atom37_traj, clean_atom37_traj, clean_traj
     
+    
+    def guidance_score(self, structure, classifier, target_class=1):
+        # Inputs:
+        # structure -> Dictionary, structure dict includes trans_t, rotmats_t, t, etc.
+        # classifier -> Model, Classifier model
+        # target_class -> int, integer value for target class
+        for key in structure.keys():
+            structure[key] = structure[key].requires_grad_(True)
+        
+        # structure['trans_t'] = structure['trans_t'].requires_grad_(True)
+        # structure['rotmats_t'] = structure['rotmats_t'].requires_grad_(True)
+        print(f"structure[trans_t] requires grad?: {structure["trans_t"].grad_fn}")
+        print(f"structure[rotmats_t] requires grad?: {structure["rotmats_t"].grad_fn}")
+        # Get predictions
+        classifier.train()
+        torch.set_grad_enabled(True)
+        prediction = classifier(structure)
+        print("The output of the classifier:")
+        print(prediction)
+        # Calculate class probabilities
+        prediction = torch.nn.functional.softmax(prediction, dim=1)
+        print("Inside guidance_score, prediction;")
+        print(prediction)
+        print(prediction[0])
+        print(f"Model output requires grad: {prediction.grad_fn}")
+        # Get only target signal
+        score = prediction[0][target_class]
+        print(f"Score requires grad: {score.grad_fn}")
+        return score
+    
+    
+    def compute_guidance_gradient(self, structure, classifier, target_class):
+        # Ensure gradients are enabled for the structure
+        structure['trans_t'] = structure['trans_t'].requires_grad_(True)
+        structure['rotmats_t'] = structure['rotmats_t'].requires_grad_(True)
+        
+        # Get the score for the target class
+        score = self.guidance_score(structure, classifier, target_class)
+        # Compute gradients
+        score.backward()
+        translation_gradient = structure['trans_t'].grad.detach()
+        rotation_gradient = structure['rotmats_t'].grad.detach()
+        
+        # Clear gradients
+        structure['trans_t'].grad = None
+        structure['rotmats_t'].grad = None
+        return translation_gradient, rotation_gradient
+    
+    
     def sample_clf(
             self,
             num_batch,
@@ -268,16 +317,19 @@ class Interpolant:
             
             # Create a fake batch
             next_batch = copy.deepcopy(batch)
-            next_batch['trans_t'] = trans_t_1
-            next_batch['rotmats_t'] = rotmats_t_1
+            next_batch['trans_t'] = pred_trans_1
+            next_batch['rotmats_t'] = pred_rotmats_1
             with torch.enable_grad():
-                xt_ = copy.deepcopy(next_batch)
-                #xt_['trans_t'] = xt_['trans_t'].detach().requires_grad_(True)
-                xt_['trans_t'] = xt_['trans_t'].requires_grad_(True)
-                #xt_['rotmats_t'] = xt_['rotmats_t'].detach().requires_grad_(True)
-                xt_['rotmats_t'] = xt_['rotmats_t'].requires_grad_(True)
-                # xt_.requires_grad = True
+                next_batch['trans_t'] = next_batch['trans_t'].requires_grad_(True)
+                next_batch['rotmats_t'] = next_batch['rotmats_t'].requires_grad_(True)
+                
+                grad = self.compute_guidance_gradient(next_batch, clf_model.model, target_class=target_class)
+                print(grad)
+                
+                """
                 cls_logits = clf_model.model(xt_)
+                print(cls_logits)
+                print(cls_logits.shape)
                 cls_logits = cls_logits.requires_grad_(True)
                 # print("Classifier outputs")
                 # print(cls_logits)
@@ -289,12 +341,13 @@ class Interpolant:
                 classifier_loss.backward()
                 print(classifier_loss)
                 print()
-                print(xt_['trans_t'])
-                cls_score_wrt_trans = - torch.autograd.grad(classifier_loss, [xt_['trans_t']])[0]
-                # cls_score = - torch.autograd.grad(loss, [xt_])[0]
+                print(next_batch['trans_t'])
+                cls_score_wrt_trans = - torch.autograd.grad(classifier_loss, [next_batch['trans_t']])[0]
+                # cls_score = - torch.autograd.grad(loss, [next_batch])[0]
+                """
             
-            pred_trans_1 = pred_trans_1 + guidance_scale * cls_score
-            pred_rotmats_1 = pred_rotmats_1 + guidance_scale * cls_score
+            pred_trans_1 = pred_trans_1 + guidance_scale * grad
+            pred_rotmats_1 = pred_rotmats_1 + guidance_scale * grad
             
             clean_traj.append(
                 (pred_trans_1.detach().cpu(), pred_rotmats_1.detach().cpu())

@@ -42,7 +42,7 @@ class ProteinFlowModulev2(LightningModule):
         
         # Classifier
         self.loaded_classifier = False
-        # self.load_classifiers()
+        # self.load_classifiers(self._classf_cfg)
 
         self._sample_write_dir = self._exp_cfg.checkpointer.dirpath
         os.makedirs(self._sample_write_dir, exist_ok=True)
@@ -287,7 +287,7 @@ class ProteinFlowModulev2(LightningModule):
             **self._exp_cfg.optimizer
         )
         
-    def load_classifiers(self, cfg, requires_grad = False):
+    def load_classifiers(self, cfg, requires_grad = True):
         self._classf_cfg = cfg
         self.cls_model = ClasfModule.load_from_checkpoint(
             checkpoint_path=self._classf_cfg.ckpt_path,
@@ -296,8 +296,8 @@ class ProteinFlowModulev2(LightningModule):
         #self.cls_model.load_state_dict(torch.load(self._classifier_cfg.ckpt_path))
         #self.cls_model.eval()
         #self.cls_model.to(self.device)
-        #for param in self.cls_model.parameters():
-        #    param.requires_grad = requires_grad
+        for param in self.cls_model.parameters():
+            param.requires_grad = requires_grad
 
     def predict_step(self, batch, batch_idx):
         device = f'cuda:{torch.cuda.current_device()}'
