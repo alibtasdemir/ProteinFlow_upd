@@ -55,7 +55,7 @@ class ClassifierTrainer:
             logger.experiment.config.update(flat_cfg)
         
         # GPU Settings
-        devices = [6]
+        devices = [2]
         log.info(f"Using devices: {devices}")
         trainer = Trainer(
             **self._exp_cfg.trainer,

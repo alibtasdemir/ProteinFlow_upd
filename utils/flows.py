@@ -231,8 +231,11 @@ class Interpolant:
         # structure -> Dictionary, structure dict includes trans_t, rotmats_t, t, etc.
         # classifier -> Model, Classifier model
         # target_class -> int, integer value for target class
-        for key in structure.keys():
-            structure[key] = structure[key].requires_grad_(True)
+        # Create a new dictionary with requires_grad tensors
+        structure_with_grad = {
+            k: v.detach().requires_grad_(True) if isinstance(v, torch.Tensor) else v
+            for k, v in structure.items()
+        }
         
         # structure['trans_t'] = structure['trans_t'].requires_grad_(True)
         # structure['rotmats_t'] = structure['rotmats_t'].requires_grad_(True)
@@ -240,8 +243,7 @@ class Interpolant:
         print(f"structure[rotmats_t] requires grad?: {structure["rotmats_t"].grad_fn}")
         # Get predictions
         classifier.train()
-        torch.set_grad_enabled(True)
-        prediction = classifier(structure)
+        prediction = classifier(structure_with_grad)
         print("The output of the classifier:")
         print(prediction)
         # Calculate class probabilities
@@ -253,25 +255,26 @@ class Interpolant:
         # Get only target signal
         score = prediction[0][target_class]
         print(f"Score requires grad: {score.grad_fn}")
-        return score
+        return score, structure_with_grad
     
     
     def compute_guidance_gradient(self, structure, classifier, target_class):
         # Ensure gradients are enabled for the structure
-        structure['trans_t'] = structure['trans_t'].requires_grad_(True)
-        structure['rotmats_t'] = structure['rotmats_t'].requires_grad_(True)
+        # structure['trans_t'] = structure['trans_t'].requires_grad_(True)
+        # structure['rotmats_t'] = structure['rotmats_t'].requires_grad_(True)
         
         # Get the score for the target class
-        score = self.guidance_score(structure, classifier, target_class)
+        score, structure_with_grad = self.guidance_score(structure, classifier, target_class)
         # Compute gradients
         score.backward()
-        translation_gradient = structure['trans_t'].grad.detach()
-        rotation_gradient = structure['rotmats_t'].grad.detach()
+        # Get gradients
+        translation_gradient = structure_with_grad['trans_t'].grad
+        rotation_gradient = structure_with_grad['rotmats_t'].grad
         
-        # Clear gradients
-        structure['trans_t'].grad = None
-        structure['rotmats_t'].grad = None
-        return translation_gradient, rotation_gradient
+        if translation_gradient is None or rotation_gradient is None:
+            raise ValueError("Gradients are None - check if the computation graph is properly connected")
+        
+        return translation_gradient.detach(), rotation_gradient.detach()
     
     
     def sample_clf(

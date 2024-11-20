@@ -83,7 +83,7 @@ experiment:
     aux_loss_weight: 1.0
     aux_loss_t_pass: 0.25
   wandb:
-    name: classifier-training-v2
+    name: classifier-training-v3
     project: se3-classifier
     save_code: true
     tags: []

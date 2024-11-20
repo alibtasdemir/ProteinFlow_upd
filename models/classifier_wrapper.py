@@ -160,7 +160,7 @@ class ClasfModule(LightningModule):
             pd.DataFrame(log).to_csv(os.path.join(self._exp_cfg.checkpointer.dirpath, f"val_{self.trainer.global_step}.csv"))
 
         self.val_output = defaultdict(list)
-
+    
     def scatter_plots(self):
         clss = torch.stack(self.val_output["clss"])
         clss_np = clss.detach().cpu().numpy()
@@ -215,6 +215,7 @@ class ClasfModule(LightningModule):
         pil_img = PIL.Image.frombytes('RGB', fig.canvas.get_width_height(), fig.canvas.tostring_rgb())
         plt.close()
         return pil_img
+
     
     def gather_log(self, log, world_size):
         if world_size == 1:

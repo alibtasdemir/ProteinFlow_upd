@@ -61,7 +61,7 @@ class Sampler:
         self._flow_module._output_dir = self._output_dir
 
     def run_sampling(self):
-        devices = [2]
+        devices = [4]
         log.info(f"Using devices: {devices}")
         eval_dataset = eu.LengthDataset(self._samples_cfg)
         dataloader = torch.utils.data.DataLoader(

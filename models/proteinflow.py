@@ -128,7 +128,7 @@ class ProteinFlow(nn.Module):
             ipa_embed *= node_mask[..., None]
             node_embed = self.trunk[f'ipa_ln_{b}'](node_embed + ipa_embed)
             seq_tfmr_out = self.trunk[f'seq_tfmr_{b}'](
-                node_embed, src_key_padding_mask=(1 - node_mask).bool())
+                node_embed, src_key_padding_mask=(1 - node_mask).to(torch.bool))
             node_embed = node_embed + self.trunk[f'post_tfmr_{b}'](seq_tfmr_out)
             node_embed = self.trunk[f'node_transition_{b}'](node_embed)
             node_embed = node_embed * node_mask[..., None]

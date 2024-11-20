@@ -48,7 +48,7 @@ inference:
     overwrite: False
   
   classifier:
-    ckpt_path: classifier_ckpt/se3-classifier/classifier-training/2024-07-26_17-09-01/last.ckpt
+    ckpt_path: classifier_ckpt/se3-classifier/classifier-training-v3/2024-11-11_17-21-05/last.ckpt
     node_embed_size: 128
     edge_embed_size: 128
     symmetric: false

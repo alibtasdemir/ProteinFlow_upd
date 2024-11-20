@@ -59,17 +59,20 @@ class ProtClassifier(nn.Module):
                     edge_embed_in=edge_in,
                     edge_embed_out=self._model_conf.edge_embed_size,
                 )
-        
+        # 8454144
         self.classifier_head = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(32768, 128),
+            nn.Linear(256*384, 128),
             nn.ReLU(),
+            # nn.Linear(32768, 128),
+            # nn.ReLU(),
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, 2),         
         )
     
     def forward(self, input_features):
+        """
         print("INSIDE FORWARD PASS")
         print(f"input_dic -> res_mask grad_fn?: {input_features["res_mask"].grad_fn}")
         print(f"input_dic -> res_mask req_grad?: {input_features["res_mask"].requires_grad}")
@@ -83,6 +86,7 @@ class ProtClassifier(nn.Module):
         print(f"input_dic -> t grad_fn?: {input_features["t"].grad_fn}")
         print(f"input_dic -> t req_grad?: {input_features["t"].requires_grad}")
         print()
+        """
         
         # Get features
         node_mask = input_features['res_mask']
@@ -103,22 +107,22 @@ class ProtClassifier(nn.Module):
         # print(f"continuous_t: {continuous_t.shape}")
         # print(f"trans_t: {trans_t.shape}")
         # print(f"rotmats_t: {rotmats_t.shape}")
-        print()
-        print(f"node_mask grad_fn?: {node_mask.grad_fn}")
-        print(f"node_mask req_grad?: {node_mask.requires_grad}")
+        # print()
+        # print(f"node_mask grad_fn?: {node_mask.grad_fn}")
+        # print(f"node_mask req_grad?: {node_mask.requires_grad}")
         
-        print(f"edge_mask grad_fn?: {edge_mask.grad_fn}")
-        print(f"edge_mask req_grad?: {edge_mask.requires_grad}")
+        # print(f"edge_mask grad_fn?: {edge_mask.grad_fn}")
+        # print(f"edge_mask req_grad?: {edge_mask.requires_grad}")
         
-        print(f"continuous_t grad_fn?: {continuous_t.grad_fn}")
-        print(f"continuous_t req_grad?: {continuous_t.requires_grad}")
+        # print(f"continuous_t grad_fn?: {continuous_t.grad_fn}")
+        # print(f"continuous_t req_grad?: {continuous_t.requires_grad}")
         
-        print(f"trans_t grad_fn?: {trans_t.grad_fn}")
-        print(f"trans_t req_grad?: {trans_t.requires_grad}")
+        # print(f"trans_t grad_fn?: {trans_t.grad_fn}")
+        # print(f"trans_t req_grad?: {trans_t.requires_grad}")
         
-        print(f"rotmats_t grad_fn?: {rotmats_t.grad_fn}")
-        print(f"rotmats_t req_grad?: {rotmats_t.requires_grad}")
-        print()
+        # print(f"rotmats_t grad_fn?: {rotmats_t.grad_fn}")
+        # print(f"rotmats_t req_grad?: {rotmats_t.requires_grad}")
+        # print()
 
         # Get embeddings
         init_node_embed = self.node_embedder(continuous_t, node_mask)
@@ -152,7 +156,7 @@ class ProtClassifier(nn.Module):
             ipa_embed *= node_mask[..., None]
             node_embed = self.trunk[f'ipa_ln_{b}'](node_embed + ipa_embed)
             seq_tfmr_out = self.trunk[f'seq_tfmr_{b}'](
-                node_embed, src_key_padding_mask=(1 - node_mask).bool())
+                node_embed, src_key_padding_mask=(1 - node_mask).to(torch.bool))
             node_embed = node_embed + self.trunk[f'post_tfmr_{b}'](seq_tfmr_out)
             node_embed = self.trunk[f'node_transition_{b}'](node_embed)
             node_embed = node_embed * node_mask[..., None]
@@ -166,8 +170,19 @@ class ProtClassifier(nn.Module):
             # print(f"edge_embed_{b}: {edge_embed.shape}")
             # print(f"ipa_embed_{b}: {ipa_embed.shape}")
             # print(f"ipa_flatten_{b}: {nn.Flatten()(ipa_embed).shape}")
-        
-        x = self.classifier_head(ipa_embed)
+        # print()
+        # print(f"ipa_embed grad_fn?: {ipa_embed.grad_fn}")
+        # print(f"ipa_embed req_grad?: {ipa_embed.requires_grad}")
+        # print(f"node_embed grad_fn?: {node_embed.grad_fn}")
+        # print(f"node_embed req_grad?: {node_embed.requires_grad}")
+        # print(f"edge_embed grad_fn?: {edge_embed.grad_fn}")
+        # print(f"edge_embed req_grad?: {edge_embed.requires_grad}")
+        # print()
+        edge_embed_mean = torch.mean(edge_embed, dim=2)
+        fused_tensor = torch.cat((ipa_embed, node_embed, edge_embed_mean), dim=-1)
+        x = self.classifier_head(fused_tensor)
         # x = torch.nn.functional.softmax(self.classifier_head(ipa_embed), dim=-1)
         # print(f"Classifier output: {x.shape}")
+        # print(f"Classifier output grad_fn?: {x.grad_fn}")
+        # print(f"Classifier output req_grad?: {x.requires_grad}")
         return x
