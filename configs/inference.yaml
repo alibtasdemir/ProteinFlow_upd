@@ -9,7 +9,10 @@ inference:
   name: run_${now:%Y-%m-%d}_${now:%H-%M}
   seed: 123
   ckpt_path: ckpt/se3-fm/dnmt-full-unconditioned/2024-09-26_00-42-38/epoch29.ckpt
-  output_dir: inference_outputs/dnmt-guided-tests/
+  output_dir: inference_outputs/dnmt-guided-tests-fixed-residues/
+
+  # Directories
+  pmpnn_dir: ./ProteinMPNN/
 
   use_gpu: True
   num_gpus: 1
@@ -43,12 +46,15 @@ inference:
     length_step: 1
 
     # Subset of lengths to sample. If null, sample all targets.
-    length_subset: [60, 80, 100, 112, 128, 196, 256, 512]
+    # length_subset: [60, 80, 100, 112, 128, 196, 256, 512]
+    length_subset: [60, 80, 100, 112, 128, 196, 256, 286, 512]
+    # ESM and ProteinMPNN samples
+    seq_per_sample: 8
 
     overwrite: False
   
   classifier:
-    ckpt_path: classifier_ckpt/se3-classifier/classifier-training-v3/2024-11-11_17-21-05/last.ckpt
+    ckpt_path: classifier_ckpt/se3-classifier/new-classifier-full/2025-02-24_01-37-28/epoch=90-step=728000.ckpt
     node_embed_size: 128
     edge_embed_size: 128
     symmetric: false
@@ -79,3 +85,9 @@ inference:
       seq_tfmr_num_heads: 2
       seq_tfmr_num_layers: 1
       num_blocks: 2
+
+fixed_inference:
+  flag: True
+  input_pdb: 6F57_A.pdb
+  fixed_residues: [639,640,641,642,643,644,645,646,647,664,665,686,687,688,888,889,890,891,892,893,894,895]
+  num_samples: 5

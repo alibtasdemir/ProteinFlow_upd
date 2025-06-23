@@ -232,30 +232,32 @@ class Interpolant:
         # classifier -> Model, Classifier model
         # target_class -> int, integer value for target class
         # Create a new dictionary with requires_grad tensors
+        """
         structure_with_grad = {
             k: v.detach().requires_grad_(True) if isinstance(v, torch.Tensor) else v
             for k, v in structure.items()
         }
-        
+        """
         # structure['trans_t'] = structure['trans_t'].requires_grad_(True)
         # structure['rotmats_t'] = structure['rotmats_t'].requires_grad_(True)
-        print(f"structure[trans_t] requires grad?: {structure["trans_t"].grad_fn}")
-        print(f"structure[rotmats_t] requires grad?: {structure["rotmats_t"].grad_fn}")
+        # print(f"structure[trans_t] requires grad?: {structure["trans_t"].grad_fn}")
+        # print(f"structure[rotmats_t] requires grad?: {structure["rotmats_t"].grad_fn}")
         # Get predictions
         classifier.train()
-        prediction = classifier(structure_with_grad)
-        print("The output of the classifier:")
-        print(prediction)
+        # print(structure)
+        prediction = classifier(structure)
+        # print("The output of the classifier:")
+        # print(prediction)
         # Calculate class probabilities
         prediction = torch.nn.functional.softmax(prediction, dim=1)
-        print("Inside guidance_score, prediction;")
-        print(prediction)
-        print(prediction[0])
-        print(f"Model output requires grad: {prediction.grad_fn}")
+        # print("Inside guidance_score, prediction;")
+        # print(prediction)
+        # print(prediction[0])
+        # print(f"Model output requires grad: {prediction.grad_fn}")
         # Get only target signal
         score = prediction[0][target_class]
-        print(f"Score requires grad: {score.grad_fn}")
-        return score, structure_with_grad
+        # print(f"Score requires grad: {score.grad_fn}")
+        return score, structure
     
     
     def compute_guidance_gradient(self, structure, classifier, target_class):
@@ -327,30 +329,9 @@ class Interpolant:
                 next_batch['rotmats_t'] = next_batch['rotmats_t'].requires_grad_(True)
                 
                 grad = self.compute_guidance_gradient(next_batch, clf_model.model, target_class=target_class)
-                print(grad)
-                
-                """
-                cls_logits = clf_model.model(xt_)
-                print(cls_logits)
-                print(cls_logits.shape)
-                cls_logits = cls_logits.requires_grad_(True)
-                # print("Classifier outputs")
-                # print(cls_logits)
-                target_tensor = torch.tensor([target_class], device=self._device)
-                # probabilities = torch.nn.functional.softmax(cls_logits, dim=1)
-                classifier_loss = torch.nn.functional.cross_entropy(cls_logits, target_tensor)
-                classifier_loss = classifier_loss.requires_grad_(True)
-                # print(classifier_loss)
-                classifier_loss.backward()
-                print(classifier_loss)
-                print()
-                print(next_batch['trans_t'])
-                cls_score_wrt_trans = - torch.autograd.grad(classifier_loss, [next_batch['trans_t']])[0]
-                # cls_score = - torch.autograd.grad(loss, [next_batch])[0]
-                """
             
-            pred_trans_1 = pred_trans_1 + guidance_scale * grad
-            pred_rotmats_1 = pred_rotmats_1 + guidance_scale * grad
+            pred_trans_1 = pred_trans_1 + guidance_scale * grad[0]
+            pred_rotmats_1 = pred_rotmats_1 + guidance_scale * grad[1]
             
             clean_traj.append(
                 (pred_trans_1.detach().cpu(), pred_rotmats_1.detach().cpu())
@@ -384,6 +365,163 @@ class Interpolant:
         prot_traj.append((pred_trans_1, pred_rotmats_1))
 
         # Convert trajectories to atom37.
+        atom37_traj = all_atom.transrot_to_atom37(prot_traj, res_mask)
+        clean_atom37_traj = all_atom.transrot_to_atom37(clean_traj, res_mask)
+        return atom37_traj, clean_atom37_traj, clean_traj
+
+    def sample_conditional(
+            self,
+            num_batch,
+            num_res,
+            model,
+            fixed_positions,
+            fixed_mask,
+            clf_model=None,
+            guidance_scale=0.2,
+            target_class=1,
+            temperature=1.0,
+    ):
+        """Sample protein structure conditioned on fixed positions.
+        
+        Args:
+            num_batch: Number of samples to generate
+            num_res: Number of residues per sample
+            model: The ProteinFlow model
+            fixed_positions: [num_batch, N, 3] tensor of fixed atom positions
+            fixed_mask: [N] boolean mask indicating which positions are fixed
+            clf_model: Optional classifier model for guidance
+            guidance_scale: Scale factor for classifier guidance (default=0.2)
+            target_class: Target class for classifier guidance (default=1)
+            temperature: Temperature parameter for sampling (default=1.0)
+        """
+        res_mask = torch.ones(num_batch, num_res, device=self._device)
+        flow_mask = ~fixed_mask  # Only flow non-fixed positions
+
+        # Initialize with fixed positions where specified
+        trans_0 = torch.where(
+            fixed_mask[None, :, None],
+            fixed_positions,  # Already has batch dimension
+            _centered_gaussian(num_batch, num_res, self._device) * NM_TO_ANG_SCALE * temperature
+        )
+        rotmats_0 = _uniform_so3(num_batch, num_res, self._device)
+        
+        # Prepare batch with all necessary inputs
+        batch = {
+            'res_mask': res_mask,
+            'flow_mask': flow_mask,
+            'fixed_positions': fixed_positions,
+            'fixed_mask': fixed_mask,
+            'trans_t': trans_0,
+            'rotmats_t': rotmats_0,
+        }
+
+        # Set-up time
+        ts = torch.linspace(
+            self._cfg.min_t, 1.0, self._sample_cfg.num_timesteps)
+        t_1 = ts[0]
+
+        prot_traj = [(trans_0, rotmats_0)]
+        clean_traj = []
+        for t_2 in ts[1:]:
+            # Run model
+            trans_t_1, rotmats_t_1 = prot_traj[-1]
+            batch['trans_t'] = trans_t_1
+            batch['rotmats_t'] = rotmats_t_1
+            t = torch.ones((num_batch, 1), device=self._device) * t_1
+            batch['t'] = t
+            
+            with torch.no_grad():
+                model_out = model(batch)
+
+            # Process model output, keeping fixed positions unchanged
+            pred_trans_1 = torch.where(
+                fixed_mask[None, :, None],
+                fixed_positions,
+                model_out['pred_trans'] * temperature
+            )
+            pred_rotmats_1 = model_out['pred_rotmats']
+            
+            # Apply classifier guidance if provided
+            if clf_model is not None:
+                # Create a new batch for classifier with cloned tensors
+                next_batch = {k: v.clone() if torch.is_tensor(v) else v for k, v in batch.items()}
+                next_batch['trans_t'] = pred_trans_1
+                next_batch['rotmats_t'] = pred_rotmats_1
+                
+                with torch.enable_grad():
+                    next_batch['trans_t'] = next_batch['trans_t'].requires_grad_(True)
+                    next_batch['rotmats_t'] = next_batch['rotmats_t'].requires_grad_(True)
+                    
+                    grad = self.compute_guidance_gradient(next_batch, clf_model.model, target_class=target_class)
+                
+                # Apply guidance only to non-fixed positions
+                pred_trans_1 = torch.where(
+                    fixed_mask[None, :, None],
+                    fixed_positions,
+                    pred_trans_1 + guidance_scale * grad[0]
+                )
+                pred_rotmats_1 = pred_rotmats_1 + guidance_scale * grad[1]
+            
+            clean_traj.append(
+                (pred_trans_1.detach().cpu(), pred_rotmats_1.detach().cpu())
+            )
+            if self._cfg.self_condition:
+                batch['trans_sc'] = pred_trans_1
+
+            # Take reverse step
+            d_t = t_2 - t_1
+            trans_t_2 = torch.where(
+                fixed_mask[None, :, None],
+                fixed_positions,
+                self._trans_euler_step(d_t, t_1, pred_trans_1, trans_t_1)
+            )
+            rotmats_t_2 = self._rots_euler_step(
+                d_t, t_1, pred_rotmats_1, rotmats_t_1)
+            prot_traj.append((trans_t_2, rotmats_t_2))
+            t_1 = t_2
+
+        # Final step
+        t_1 = ts[-1]
+        trans_t_1, rotmats_t_1 = prot_traj[-1]
+        batch['trans_t'] = trans_t_1
+        batch['rotmats_t'] = rotmats_t_1
+        batch['t'] = torch.ones((num_batch, 1), device=self._device) * t_1
+        
+        with torch.no_grad():
+            model_out = model(batch)
+            
+        pred_trans_1 = torch.where(
+            fixed_mask[None, :, None],
+            fixed_positions,
+            model_out['pred_trans'] * temperature
+        )
+        pred_rotmats_1 = model_out['pred_rotmats']
+        
+        # Apply final classifier guidance if provided
+        if clf_model is not None:
+            next_batch = {k: v.clone() if torch.is_tensor(v) else v for k, v in batch.items()}
+            next_batch['trans_t'] = pred_trans_1
+            next_batch['rotmats_t'] = pred_rotmats_1
+            
+            with torch.enable_grad():
+                next_batch['trans_t'] = next_batch['trans_t'].requires_grad_(True)
+                next_batch['rotmats_t'] = next_batch['rotmats_t'].requires_grad_(True)
+                
+                grad = self.compute_guidance_gradient(next_batch, clf_model.model, target_class=target_class)
+            
+            pred_trans_1 = torch.where(
+                fixed_mask[None, :, None],
+                fixed_positions,
+                pred_trans_1 + guidance_scale * grad[0]
+            )
+            pred_rotmats_1 = pred_rotmats_1 + guidance_scale * grad[1]
+        
+        clean_traj.append(
+            (pred_trans_1.detach().cpu(), pred_rotmats_1.detach().cpu())
+        )
+        prot_traj.append((pred_trans_1, pred_rotmats_1))
+
+        # Convert trajectories to atom37
         atom37_traj = all_atom.transrot_to_atom37(prot_traj, res_mask)
         clean_atom37_traj = all_atom.transrot_to_atom37(clean_traj, res_mask)
         return atom37_traj, clean_atom37_traj, clean_traj

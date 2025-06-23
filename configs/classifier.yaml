@@ -2,14 +2,14 @@ data:
   dataset:
     classifier: true
     seed: 9
-    max_num_res: 256
+    max_num_res: 512
     cache_num_res: 0
     min_num_res: 0
     subset: null
     samples_per_eval_length: 25
     num_eval_lengths: 5
     min_eval_length: 500
-    csv_path: class_preprocessed/metadata.csv
+    csv_path: combined_class_dataset/metadata.csv
   loader:
     batch_size: 32
     num_workers: 4
@@ -83,7 +83,7 @@ experiment:
     aux_loss_weight: 1.0
     aux_loss_t_pass: 0.25
   wandb:
-    name: classifier-training-v3
+    name: new-classifier-full
     project: se3-classifier
     save_code: true
     tags: []

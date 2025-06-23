@@ -401,4 +401,9 @@ dnmt_full/
 *.pdb
 *preprocessed*/
 *_data_256/
+new_dnmt
+new_dnmt/*
+combined*/
 metadata.csv
+*.csv
+test_outputs/

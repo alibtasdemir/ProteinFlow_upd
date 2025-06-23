@@ -43,13 +43,18 @@ parser.add_argument(
     action='store_true'
 )
 parser.add_argument(
+    '--max_len',
+    help='Max length of protein.',
+    type=int,
+    default=512)
+parser.add_argument(
     '--class',
     help='If the files has class information.',
     action='store_true'
 )
 
 
-def process_file(file_path: str, write_dir: str, remove_file: bool):
+def process_file(file_path: str, write_dir: str, remove_file: bool, max_len: int):
     """Processes protein file into usable, smaller pickles.
 
     Args:
@@ -68,9 +73,9 @@ def process_file(file_path: str, write_dir: str, remove_file: bool):
     basefname = os.path.basename(file_path).replace('.pdb', '')
     #TODO
     # Add class parameter
-    # pdb_name, className = basefname.split('_')[1], basefname.split('_')[0]
-    pdb_name = basefname
-    className = 'neg'
+    pdb_name, className = basefname.split('_')[1], basefname.split('_')[0]
+    # pdb_name = basefname
+    # className = 'neg'
     
     # pdb_name = os.path.basename(file_path).replace('.pdb', '')
     metadata['pdb_name'] = pdb_name
@@ -111,6 +116,9 @@ def process_file(file_path: str, write_dir: str, remove_file: bool):
     modeled_idx = np.where(complex_aatype != 20)[0]
     if np.sum(complex_aatype != 20) == 0:
         raise errors.LengthError('No modeled residues')
+    if complex_aatype.shape[0] > max_len:
+        raise errors.LengthError(
+            f'Too long {complex_aatype.shape[0]}')
     min_modeled_idx = np.min(modeled_idx)
     max_modeled_idx = np.max(modeled_idx)
     metadata['modeled_seq_len'] = max_modeled_idx - min_modeled_idx + 1
@@ -148,7 +156,7 @@ def process_file(file_path: str, write_dir: str, remove_file: bool):
     return metadata
 
 
-def process_serially(all_paths, write_dir, remove_file):
+def process_serially(all_paths, write_dir, remove_file, max_len):
     all_metadata = []
     for i, file_path in enumerate(all_paths):
         try:
@@ -156,7 +164,8 @@ def process_serially(all_paths, write_dir, remove_file):
             metadata = process_file(
                 file_path,
                 write_dir,
-                remove_file)
+                remove_file,
+                max_len)
             elapsed_time = time.time() - start_time
             print(f'Finished {file_path} in {elapsed_time:2.2f}s')
             all_metadata.append(metadata)
@@ -169,13 +178,15 @@ def process_fn(
         file_path,
         verbose=None,
         write_dir=None,
-        remove_file=True):
+        remove_file=True,
+        max_len=512):
     try:
         start_time = time.time()
         metadata = process_file(
             file_path,
             write_dir,
-            remove_file)
+            remove_file,
+            max_len)
         elapsed_time = time.time() - start_time
         if verbose:
             print(f'Finished {file_path} in {elapsed_time:2.2f}s')
@@ -206,13 +217,15 @@ def main(args):
         all_metadata = process_serially(
             all_file_paths,
             write_dir,
-            args.remove_file)
+            args.remove_file,
+            args.max_len)
     else:
         _process_fn = fn.partial(
             process_fn,
             verbose=args.verbose,
             write_dir=write_dir,
-            remove_file=args.remove_file)
+            remove_file=args.remove_file,
+            max_len=args.max_len)
         with mp.Pool(processes=args.num_processes) as pool:
             all_metadata = pool.map(_process_fn, all_file_paths)
         all_metadata = [x for x in all_metadata if x is not None]

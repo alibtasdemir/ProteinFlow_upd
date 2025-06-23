@@ -62,9 +62,10 @@ def torsion_angles_to_frames(
 
     """
     # [*, N, 8, 4, 4]
-    with torch.no_grad():
-        default_4x4 = DEFAULT_FRAMES.to(aatype.device)[aatype, ...]  # type: ignore [attr-defined]
-
+    # with torch.no_grad():
+    #    default_4x4 = DEFAULT_FRAMES.to(aatype.device)[aatype, ...]  # type: ignore [attr-defined]
+    default_4x4 = DEFAULT_FRAMES.to(aatype.device)[aatype, ...]  # type: ignore [attr-defined]
+    
     # [*, N, 8] transformations, i.e.
     #   One [*, N, 8, 3, 3] rotation matrix and
     #   One [*, N, 8, 3]    translation matrix
@@ -146,14 +147,14 @@ def frames_to_atom14_pos(
     Returns:
 
     """
-    with torch.no_grad():
-        group_mask = GROUP_IDX.to(aatype.device)[aatype, ...]
-        group_mask = torch.nn.functional.one_hot(
+    # with torch.no_grad():
+    group_mask = GROUP_IDX.to(aatype.device)[aatype, ...]
+    group_mask = torch.nn.functional.one_hot(
             group_mask,
             num_classes=DEFAULT_FRAMES.shape[-3],
-        )
-        frame_atom_mask = ATOM_MASK.to(aatype.device)[aatype, ...].unsqueeze(-1)  # type: ignore [attr-defined]
-        frame_null_pos = IDEALIZED_POS.to(aatype.device)[aatype, ...]  # type: ignore [attr-defined]
+    )
+    frame_atom_mask = ATOM_MASK.to(aatype.device)[aatype, ...].unsqueeze(-1)  # type: ignore [attr-defined]
+    frame_null_pos = IDEALIZED_POS.to(aatype.device)[aatype, ...]  # type: ignore [attr-defined]
 
     # [*, N, 14, 8]
     t_atoms_to_global = r[..., None, :] * group_mask  # type: ignore [index]

@@ -162,7 +162,8 @@ class PdbDataModule(LightningDataModule):
     
     def prepare_csv(self):
         pdb_csv = pd.read_csv(self.dataset_cfg.csv_path)
-        pdb_csv = pdb_csv.sample(2000)
+        # SAMPLE SIZE ??
+        pdb_csv = pdb_csv.sample(10000)
         pdb_csv = pdb_csv[pdb_csv.modeled_seq_len <= self.dataset_cfg.max_num_res]
         pdb_csv = pdb_csv[pdb_csv.modeled_seq_len >= self.dataset_cfg.min_num_res]
         

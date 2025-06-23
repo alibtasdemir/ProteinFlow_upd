@@ -1,6 +1,8 @@
 """ Metrics. """
 import mdtraj as md
 import numpy as np
+import logging
+import torch
 
 import tree
 
@@ -140,15 +142,45 @@ def ca_ca_clashes(ca_pos, tol=1.5):
     return np.sum(clashes), np.mean(clashes)
 
 def calc_ca_ca_metrics(ca_pos, bond_tol=0.1, clash_tol=1.0):
+    """Calculate CA-CA distance metrics.
+    
+    Args:
+        ca_pos: [N, 3] array of CA positions
+        bond_tol: Tolerance for CA-CA bond length deviation
+        clash_tol: Distance threshold for steric clashes
+        
+    Returns:
+        Dictionary of metrics
+    """
+    # Debug logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Input ca_pos shape: {ca_pos.shape}")
+    logger.info(f"Input ca_pos type: {type(ca_pos)}")
+    
+    # Ensure input is numpy array
+    if isinstance(ca_pos, torch.Tensor):
+        ca_pos = ca_pos.detach().cpu().numpy()
+    
+    # Ensure shape is [N, 3]
+    if len(ca_pos.shape) == 1:
+        ca_pos = ca_pos.reshape(-1, 3)
+    elif len(ca_pos.shape) > 2:
+        raise ValueError(f"Expected ca_pos shape [N, 3], got {ca_pos.shape}")
+        
+    logger.info(f"Processed ca_pos shape: {ca_pos.shape}")
+    
+    # Calculate CA-CA distances
     ca_bond_dists = np.linalg.norm(
         ca_pos - np.roll(ca_pos, 1, axis=0), axis=-1)[1:]
     ca_ca_dev = np.mean(np.abs(ca_bond_dists - residue_constants.ca_ca))
     ca_ca_valid = np.mean(ca_bond_dists < (residue_constants.ca_ca + bond_tol))
 
+    # Calculate steric clashes
     ca_ca_dists2d = np.linalg.norm(
         ca_pos[:, None, :] - ca_pos[None, :, :], axis=-1)
     inter_dists = ca_ca_dists2d[np.where(np.triu(ca_ca_dists2d, k=0) > 0)]
     clashes = inter_dists < clash_tol
+    
     return {
         'ca_ca_deviation': ca_ca_dev,
         'ca_ca_valid_percent': ca_ca_valid,

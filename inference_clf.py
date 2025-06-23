@@ -61,7 +61,7 @@ class Sampler:
         self._flow_module._output_dir = self._output_dir
 
     def run_sampling(self):
-        devices = [4]
+        devices = [6]
         log.info(f"Using devices: {devices}")
         eval_dataset = eu.LengthDataset(self._samples_cfg)
         dataloader = torch.utils.data.DataLoader(
@@ -70,6 +70,7 @@ class Sampler:
             accelerator="gpu",
             # strategy="ddp_notebook",
             devices=devices,
+            inference_mode=False,
         )
         trainer.predict(self._flow_module, dataloaders=dataloader)
 

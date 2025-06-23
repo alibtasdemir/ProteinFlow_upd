@@ -32,6 +32,7 @@ class ClasfModule(LightningModule):
         self.interpolant = Interpolant(cfg.interpolant)
         
         self.crossent = torch.nn.CrossEntropyLoss()
+        self.accuracy = torchmetrics.Accuracy(task='binary')
         
         self.val_output = defaultdict(list)
         self.save_hyperparameters()

@@ -1,7 +1,10 @@
 import collections
 import io
 import pickle
+import dataclasses
+
 from typing import Optional, Any, List, Dict
+from Bio import PDB
 from Bio.PDB import PDBParser
 from Bio.PDB.Chain import Chain
 from openfold_utils import rigid_utils
@@ -325,3 +328,109 @@ def create_data_loader(
         drop_last=drop_last,
         multiprocessing_context='fork' if num_workers != 0 else None,
     )
+
+
+def process_chain(chain: Chain, chain_id: str) -> Protein:
+    """Convert a PDB chain object into a AlphaFold Protein instance.
+
+    Forked from alphafold.common.protein.from_pdb_string
+
+    WARNING: All non-standard residue types will be converted into UNK. All
+        non-standard atoms will be ignored.
+
+    Took out lines 94-97 which don't allow insertions in the PDB.
+    Sabdab uses insertions for the chothia numbering so we need to allow them.
+
+    Took out lines 110-112 since that would mess up CDR numbering.
+
+    Args:
+        chain: Instance of Biopython's chain class.
+
+    Returns:
+        Protein object with protein features.
+    """
+    atom_positions = []
+    aatype = []
+    atom_mask = []
+    residue_index = []
+    b_factors = []
+    chain_ids = []
+    for res in chain:
+        res_shortname = residue_constants.restype_3to1.get(res.resname, "X")
+        restype_idx = residue_constants.restype_order.get(
+            res_shortname, residue_constants.restype_num
+        )
+        pos = np.zeros((residue_constants.atom_type_num, 3))
+        mask = np.zeros((residue_constants.atom_type_num,))
+        res_b_factors = np.zeros((residue_constants.atom_type_num,))
+        for atom in res:
+            if atom.name not in residue_constants.atom_types:
+                continue
+            pos[residue_constants.atom_order[atom.name]] = atom.coord
+            mask[residue_constants.atom_order[atom.name]] = 1.0
+            res_b_factors[residue_constants.atom_order[atom.name]] = atom.bfactor
+        aatype.append(restype_idx)
+        atom_positions.append(pos)
+        atom_mask.append(mask)
+        residue_index.append(res.id[1])
+        b_factors.append(res_b_factors)
+        chain_ids.append(chain_id)
+
+    return Protein(
+        atom_positions=np.array(atom_positions),
+        atom_mask=np.array(atom_mask),
+        aatype=np.array(aatype),
+        residue_index=np.array(residue_index),
+        chain_index=np.array(chain_ids),
+        b_factors=np.array(b_factors),
+    )
+
+
+def parse_pdb_feats(
+    pdb_name: str,
+    pdb_path: str,
+    scale_factor=1.0,
+    # TODO: Make the default behaviour read all chains.
+    chain_id="A",
+    exclude_hetatm=False,
+):
+    """
+    Args:
+        pdb_name: name of PDB to parse.
+        pdb_path: path to PDB file to read.
+        scale_factor: factor to scale atom positions.
+        chain_id: chain ID to process (default='A')
+        exclude_hetatm: whether to exclude HETATM entries (default=False)
+    Returns:
+        Dict with CHAIN_FEATS features extracted from PDB with specified
+        preprocessing.
+    """
+    parser = PDB.PDBParser(QUIET=True)
+    structure = parser.get_structure(pdb_name, pdb_path)
+    
+    # Filter out HETATM entries if requested
+    if exclude_hetatm:
+        for model in structure:
+            for chain in model:
+                het_residues = [res for res in chain if res.id[0] != ' ']
+                for res in het_residues:
+                    chain.detach_child(res.id)
+    
+    struct_chains = {chain.id: chain for chain in structure.get_chains()}
+
+    def _process_chain_id(x):
+        chain_prot = process_chain(struct_chains[x], x)
+        chain_dict = dataclasses.asdict(chain_prot)
+
+        # Process features
+        feat_dict = {x: chain_dict[x] for x in CHAIN_FEATS}
+        return parse_chain_feats(feat_dict, scale_factor=scale_factor)
+
+    if isinstance(chain_id, str):
+        return _process_chain_id(chain_id)
+    elif isinstance(chain_id, list):
+        return {x: _process_chain_id(x) for x in chain_id}
+    elif chain_id is None:
+        return {x: _process_chain_id(x) for x in struct_chains}
+    else:
+        raise ValueError(f"Unrecognized chain list {chain_id}")

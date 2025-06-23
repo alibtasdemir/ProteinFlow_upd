@@ -72,21 +72,6 @@ class ProtClassifier(nn.Module):
         )
     
     def forward(self, input_features):
-        """
-        print("INSIDE FORWARD PASS")
-        print(f"input_dic -> res_mask grad_fn?: {input_features["res_mask"].grad_fn}")
-        print(f"input_dic -> res_mask req_grad?: {input_features["res_mask"].requires_grad}")
-        
-        print(f"input_dic -> trans_t grad_fn?: {input_features["trans_t"].grad_fn}")
-        print(f"input_dic -> trans_t req_grad?: {input_features["trans_t"].requires_grad}")
-        
-        print(f"input_dic -> rotmats_t grad_fn?: {input_features["rotmats_t"].grad_fn}")
-        print(f"input_dic -> rotmats_t req_grad?: {input_features["rotmats_t"].requires_grad}")
-        
-        print(f"input_dic -> t grad_fn?: {input_features["t"].grad_fn}")
-        print(f"input_dic -> t req_grad?: {input_features["t"].requires_grad}")
-        print()
-        """
         
         # Get features
         node_mask = input_features['res_mask']
@@ -101,28 +86,6 @@ class ProtClassifier(nn.Module):
         trans_t = F.pad(trans_t, pad=(0,0,0,padding_amount,0,0))
         rotmats_t = input_features['rotmats_t']
         rotmats_t = F.pad(rotmats_t, pad=(0,0,0,0,0,padding_amount,0,0))
-        
-        # print(f"Node mask padded: {node_mask.shape}")
-        # print(f"Edge mask: {edge_mask.shape}")
-        # print(f"continuous_t: {continuous_t.shape}")
-        # print(f"trans_t: {trans_t.shape}")
-        # print(f"rotmats_t: {rotmats_t.shape}")
-        # print()
-        # print(f"node_mask grad_fn?: {node_mask.grad_fn}")
-        # print(f"node_mask req_grad?: {node_mask.requires_grad}")
-        
-        # print(f"edge_mask grad_fn?: {edge_mask.grad_fn}")
-        # print(f"edge_mask req_grad?: {edge_mask.requires_grad}")
-        
-        # print(f"continuous_t grad_fn?: {continuous_t.grad_fn}")
-        # print(f"continuous_t req_grad?: {continuous_t.requires_grad}")
-        
-        # print(f"trans_t grad_fn?: {trans_t.grad_fn}")
-        # print(f"trans_t req_grad?: {trans_t.requires_grad}")
-        
-        # print(f"rotmats_t grad_fn?: {rotmats_t.grad_fn}")
-        # print(f"rotmats_t req_grad?: {rotmats_t.requires_grad}")
-        # print()
 
         # Get embeddings
         init_node_embed = self.node_embedder(continuous_t, node_mask)
@@ -130,6 +93,7 @@ class ProtClassifier(nn.Module):
             trans_sc = torch.zeros_like(trans_t)
         else:
             trans_sc = input_features['trans_sc']
+            trans_sc = F.pad(trans_sc, pad=(0,0,0,padding_amount,0,0))
         init_edge_embed = self.edge_embedder(
             init_node_embed, trans_t, trans_sc, edge_mask
         )

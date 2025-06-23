@@ -12,7 +12,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 
 # from dataset.data import PdbDataModule
 from dataset.classification_data import PdbDataModule
-from models.classifier_wrapper import ClasfModule
+from models.classifier_wrapper_v2 import ClasfModule
 from dataset.classification_data import get_dataloaders
 
 from utils.experiments import get_pylogger, flatten_dict
@@ -55,7 +55,7 @@ class ClassifierTrainer:
             logger.experiment.config.update(flat_cfg)
         
         # GPU Settings
-        devices = [2]
+        devices = [3]
         log.info(f"Using devices: {devices}")
         trainer = Trainer(
             **self._exp_cfg.trainer,
